@@ -1,0 +1,411 @@
+{% extends "visitors/base.html" %}
+{% block pagewidth %}page-wide{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+  <h5 class="mb-0" data-i18n="title"></h5>
+  <div class="d-flex align-items-center gap-2">
+    <span id="updated" class="small text-muted"></span>
+    <button id="langBtn" class="btn btn-sm btn-outline-primary"></button>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-outline-secondary" data-i18n="logout"></button>
+    </form>
+  </div>
+</div>
+
+<div id="alerts"></div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-ongoing">
+      <span data-i18n="ongoing"></span> <span id="count-ongoing" class="badge bg-success">0</span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-completed">
+      <span data-i18n="completed"></span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-visitors">
+      <span data-i18n="visitors"></span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-blacklist">
+      <span data-i18n="blacklist"></span>
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="tab-ongoing"></div>
+  <div class="tab-pane fade" id="tab-completed"></div>
+  <div class="tab-pane fade" id="tab-visitors">
+    <input id="search" class="form-control mb-2" type="search" autocomplete="off">
+    <div id="visitors-list"></div>
+  </div>
+  <div class="tab-pane fade" id="tab-blacklist"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const csrf = "{{ csrf_token }}";
+
+  // ---------- Translations (edit any wording here) ----------
+  const I18N = {
+    en: {
+      title: "Live Dashboard", logout: "Logout",
+      ongoing: "Ongoing", completed: "Completed", visitors: "Visitors", blacklist: "Blacklist",
+      search: "Search name or plate...",
+      entered: "Entered", stayed: "Stayed", min: "min",
+      timeLeft: "Time left", overBy: "Over by",
+      call: "Call", extend: "+15 min", markExited: "Mark exited", dismiss: "Dismiss",
+      blacklistBtn: "Blacklist", remove: "Remove", blacklistedBadge: "Blacklisted",
+      name: "Name", plate: "Plate", phone: "Phone", ic: "IC", action: "Action",
+      entry: "Entry", exit: "Exit", stayedCol: "Stayed", by: "Exit recorded by",
+      who: "Plate / IC", reason: "Reason", date: "Date", addedBy: "Added by",
+      m_visitor: "Visitor", m_guard: "Guard", m_staff: "Staff",
+      alertMsg: "OVERSTAY: {name} ({plate}) has gone over the {limit}-minute limit.",
+      noOngoing: "No visitors inside right now.",
+      noCompleted: "No completed visits yet.",
+      noVisitors: "No visitors found.",
+      emptyBlacklist: "Blacklist is empty.",
+      confirmCall: "Call {name} at {phone}?",
+      confirmExtend: "Give {name} 15 more minutes?",
+      confirmExit: "Mark {name} as exited?",
+      confirmRemove: "Remove {who} from the blacklist?",
+      promptReason: "Reason for blacklisting {name}:",
+      reasonRequired: "A reason is required.",
+      updated: "Updated", lost: "Connection lost, retrying..."
+    },
+    ms: {
+      title: "Papan Pemuka Langsung", logout: "Log Keluar",
+      ongoing: "Sedang Berlangsung", completed: "Selesai", visitors: "Pelawat", blacklist: "Senarai Hitam",
+      search: "Cari nama atau no. plat...",
+      entered: "Masuk", stayed: "Tempoh", min: "min",
+      timeLeft: "Baki masa", overBy: "Lebih",
+      call: "Hubungi", extend: "+15 min", markExited: "Tandakan keluar", dismiss: "Tutup",
+      blacklistBtn: "Senarai hitam", remove: "Buang", blacklistedBadge: "Disenarai hitam",
+      name: "Nama", plate: "No. plat", phone: "No. telefon", ic: "No. KP", action: "Tindakan",
+      entry: "Masuk", exit: "Keluar", stayedCol: "Tempoh", by: "Keluar direkod oleh",
+      who: "Plat / No. KP", reason: "Sebab", date: "Tarikh", addedBy: "Ditambah oleh",
+      m_visitor: "Pelawat", m_guard: "Pengawal", m_staff: "Kakitangan",
+      alertMsg: "LEBIH MASA: {name} ({plate}) telah melebihi had {limit} minit.",
+      noOngoing: "Tiada pelawat di dalam buat masa ini.",
+      noCompleted: "Belum ada lawatan selesai.",
+      noVisitors: "Tiada pelawat dijumpai.",
+      emptyBlacklist: "Senarai hitam kosong.",
+      confirmCall: "Hubungi {name} di {phone}?",
+      confirmExtend: "Beri {name} 15 minit tambahan?",
+      confirmExit: "Tandakan {name} sudah keluar?",
+      confirmRemove: "Buang {who} daripada senarai hitam?",
+      promptReason: "Sebab menyenaraihitamkan {name}:",
+      reasonRequired: "Sebab diperlukan.",
+      updated: "Dikemas kini", lost: "Sambungan terputus, mencuba semula..."
+    }
+  };
+
+  let lang = "en";
+  try { lang = localStorage.getItem("lang") || "en"; } catch (e) {}
+  if (!I18N[lang]) lang = "en";
+
+  function t(key, vars) {
+    let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    if (vars) Object.keys(vars).forEach(k => { s = s.split("{" + k + "}").join(vars[k]); });
+    return s;
+  }
+
+  // ---------- Helpers ----------
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;   // textContent keeps visitor input safe
+    return e;
+  }
+
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"X-CSRFToken": csrf, "Content-Type": "application/json"},
+      body: JSON.stringify(body || {}),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      throw new Error((data.message || "Request failed") + " (error " + res.status + ")");
+    }
+    return data;
+  }
+
+  async function act(url, question) {
+    if (question && !confirm(question)) return;
+    try { await post(url); } catch (e) { alert(e.message); }
+    refresh();
+  }
+
+  function fmt(sec) {          // seconds -> mm:ss (or h:mm:ss)
+    const s = Math.abs(sec);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    const mm = String(m).padStart(2, "0"), ss = String(x).padStart(2, "0");
+    return h ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+  }
+
+  function callButton(name, phone, tel) {
+    const a = el("a", "btn btn-sm btn-primary", t("call"));
+    a.href = "tel:" + tel;
+    a.addEventListener("click", ev => {
+      if (!confirm(t("confirmCall", {name: name, phone: phone}))) ev.preventDefault();
+    });
+    return a;
+  }
+
+  function makeTable(headers, rows) {
+    const table = el("table", "table table-sm table-striped bg-white align-middle");
+    const head = el("tr");
+    headers.forEach(h => head.appendChild(el("th", "", h)));
+    table.appendChild(el("thead")).appendChild(head);
+    const tbody = el("tbody");
+    rows.forEach(cells => {
+      const tr = el("tr");
+      cells.forEach(c => {
+        const td = el("td");
+        if (c instanceof Node) td.appendChild(c); else td.textContent = c;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
+  // ---------- State ----------
+  let lastData = null;
+  let canBL = false;
+  let offset = 0;          // server clock minus browser clock, in seconds
+  let timers = [];         // one entry per ongoing visitor card
+  let lastUpdate = null;
+  const cache = {};        // remembers what was drawn, so we only redraw on change
+  const COLORS = {ok: "success", warn: "warning", over: "danger"};
+
+  // ---------- Drawing ----------
+  function drawAlerts(alerts) {
+    const box = document.getElementById("alerts");
+    box.replaceChildren();
+    alerts.forEach(a => {
+      const card = el("div", "alert alert-danger d-flex justify-content-between align-items-center flex-wrap gap-2");
+      card.appendChild(el("div", "fw-bold", t("alertMsg", {name: a.name, plate: a.plate, limit: a.limit})));
+      const btns = el("div", "d-flex gap-1");
+      btns.appendChild(callButton(a.name, a.phone, a.tel));
+      const dismiss = el("button", "btn btn-sm btn-outline-dark", t("dismiss"));
+      dismiss.addEventListener("click", () => act("/api/notifications/" + a.id + "/read/"));
+      btns.appendChild(dismiss);
+      card.appendChild(btns);
+      box.appendChild(card);
+    });
+    document.title = (alerts.length ? "(" + alerts.length + ") " : "") + "SecurePass";
+  }
+
+  function drawOngoing(rows) {
+    document.getElementById("count-ongoing").textContent = rows.length;
+    const pane = document.getElementById("tab-ongoing");
+    pane.replaceChildren();
+    timers = [];
+    if (!rows.length) {
+      pane.appendChild(el("p", "text-muted", t("noOngoing")));
+      return;
+    }
+    rows.forEach(r => {
+      const card = el("div", "card mb-2");
+      const body = el("div", "card-body py-2");
+      const top = el("div", "d-flex justify-content-between flex-wrap gap-2");
+
+      const info = el("div");
+      info.appendChild(el("div", "fw-bold", r.plate + "  -  " + r.name));
+      const elapsedEl = el("div", "small text-muted");
+      info.appendChild(elapsedEl);
+      const badge = el("span", "badge");
+      info.appendChild(badge);
+      top.appendChild(info);
+
+      const actions = el("div", "d-flex gap-1 align-items-start");
+      actions.appendChild(callButton(r.name, r.phone, r.tel));
+      const ext = el("button", "btn btn-sm btn-outline-secondary", t("extend"));
+      ext.addEventListener("click", () =>
+        act("/api/logbook/" + r.id + "/extend/", t("confirmExtend", {name: r.name})));
+      actions.appendChild(ext);
+      const out = el("button", "btn btn-sm btn-outline-danger", t("markExited"));
+      out.addEventListener("click", () =>
+        act("/api/logbook/" + r.id + "/exit/", t("confirmExit", {name: r.name})));
+      actions.appendChild(out);
+      top.appendChild(actions);
+      body.appendChild(top);
+
+      const bar = el("div", "progress mt-2");
+      bar.style.height = "6px";
+      const fill = el("div", "progress-bar");
+      bar.appendChild(fill);
+      body.appendChild(bar);
+
+      card.appendChild(body);
+      pane.appendChild(card);
+      timers.push({r: r, card: card, elapsedEl: elapsedEl, badge: badge, fill: fill, state: null, fired: false});
+    });
+    tick();
+  }
+
+  function drawCompleted(rows) {
+    const pane = document.getElementById("tab-completed");
+    pane.replaceChildren();
+    if (!rows.length) { pane.appendChild(el("p", "text-muted", t("noCompleted"))); return; }
+    pane.appendChild(makeTable(
+      [t("plate"), t("name"), t("entry"), t("exit"), t("stayedCol"), t("by")],
+      rows.map(r => [r.plate, r.name, r.entry, r.exit, r.stayed + " " + t("min"), t("m_" + r.method)])
+    ));
+  }
+
+  async function blacklistVisitor(v) {
+    const reason = prompt(t("promptReason", {name: v.name}));
+    if (reason === null) return;
+    if (!reason.trim()) { alert(t("reasonRequired")); return; }
+    try {
+      await post("/api/visitors/" + v.id + "/blacklist/", {reason: reason.trim()});
+    } catch (e) {
+      alert(e.message);
+    }
+    refresh();
+  }
+
+  function drawVisitors() {
+    const list = document.getElementById("visitors-list");
+    list.replaceChildren();
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const all = lastData ? lastData.visitors : [];
+    const rows = all.filter(v => !q || v.name.toLowerCase().includes(q) || v.plate.toLowerCase().includes(q));
+    if (!rows.length) { list.appendChild(el("p", "text-muted", t("noVisitors"))); return; }
+    list.appendChild(makeTable(
+      [t("name"), t("plate"), t("phone"), t("ic"), t("action")],
+      rows.map(v => {
+        let action = "";
+        if (v.blacklisted) {
+          action = el("span", "badge bg-dark", t("blacklistedBadge"));
+        } else if (canBL) {
+          action = el("button", "btn btn-sm btn-outline-danger", t("blacklistBtn"));
+          action.addEventListener("click", () => blacklistVisitor(v));
+        }
+        return [v.name, v.plate, v.phone, v.ic, action];
+      })
+    ));
+  }
+
+  function drawBlacklist(rows) {
+    const pane = document.getElementById("tab-blacklist");
+    pane.replaceChildren();
+    if (!rows.length) { pane.appendChild(el("p", "text-muted", t("emptyBlacklist"))); return; }
+    const headers = [t("name"), t("who"), t("reason"), t("date"), t("addedBy")];
+    if (canBL) headers.push(t("action"));
+    pane.appendChild(makeTable(headers, rows.map(b => {
+      const cells = [b.name, b.who, b.reason, b.date, b.by];
+      if (canBL) {
+        const btn = el("button", "btn btn-sm btn-outline-secondary", t("remove"));
+        btn.addEventListener("click", () =>
+          act("/api/blacklist/" + b.id + "/remove/", t("confirmRemove", {who: b.name + " (" + b.who + ")"})));
+        cells.push(btn);
+      }
+      return cells;
+    })));
+  }
+
+  function renderIfChanged(name, data, fn) {
+    const s = JSON.stringify(data);
+    if (cache[name] === s) return;
+    cache[name] = s;
+    fn(data);
+  }
+
+  function renderAll(data) {
+    renderIfChanged("alerts", data.alerts, drawAlerts);
+    renderIfChanged("ongoing", data.ongoing, drawOngoing);
+    renderIfChanged("completed", data.completed, drawCompleted);
+    renderIfChanged("visitors", {v: data.visitors, c: data.can_blacklist}, drawVisitors);
+    renderIfChanged("blacklist", {b: data.blacklist, c: data.can_blacklist}, () => drawBlacklist(data.blacklist));
+  }
+
+  // ---------- Live timers (run every second in the browser) ----------
+  function setState(tm, state) {
+    const c = COLORS[state];
+    tm.card.className = "card mb-2 border-" + c;
+    tm.badge.className = "badge bg-" + c + (state === "warn" ? " text-dark" : "");
+    tm.fill.className = "progress-bar bg-" + c;
+  }
+
+  function tick() {
+    const now = Date.now() / 1000 + offset;
+    timers.forEach(tm => {
+      const total = tm.r.limit * 60;
+      const elapsed = Math.max(0, Math.floor(now - tm.r.entry_ts));
+      const remaining = total - elapsed;
+      const state = remaining < 0 ? "over" : (remaining <= 300 ? "warn" : "ok");
+
+      tm.elapsedEl.textContent = t("entered") + " " + tm.r.entry + "  |  " +
+        t("stayed") + " " + fmt(elapsed) + " / " + tm.r.limit + " " + t("min");
+      tm.badge.textContent = remaining >= 0
+        ? t("timeLeft") + " " + fmt(remaining)
+        : t("overBy") + " " + fmt(remaining);
+      tm.fill.style.width = Math.min(100, (elapsed / total) * 100) + "%";
+
+      if (state !== tm.state) { setState(tm, state); tm.state = state; }
+      if (state === "over" && !tm.fired) {   // ask the server for the alert right away
+        tm.fired = true;
+        setTimeout(refresh, 1500);
+      }
+    });
+  }
+
+  // ---------- Language ----------
+  function setUpdated() {
+    const box = document.getElementById("updated");
+    box.textContent = lastUpdate ? t("updated") + " " + lastUpdate : "";
+  }
+
+  function applyStatic() {
+    document.querySelectorAll("[data-i18n]").forEach(e => { e.textContent = t(e.dataset.i18n); });
+    document.getElementById("search").placeholder = t("search");
+    document.getElementById("langBtn").textContent = lang === "en" ? "Bahasa Melayu" : "English";
+    document.documentElement.lang = lang === "ms" ? "ms" : "en";
+  }
+
+  document.getElementById("langBtn").addEventListener("click", () => {
+    lang = lang === "en" ? "ms" : "en";
+    try { localStorage.setItem("lang", lang); } catch (e) {}
+    applyStatic();
+    Object.keys(cache).forEach(k => delete cache[k]);
+    if (lastData) renderAll(lastData);
+    setUpdated();
+  });
+
+  document.getElementById("search").addEventListener("input", drawVisitors);
+
+  // ---------- Talking to the server (every 5 seconds) ----------
+  async function refresh() {
+    try {
+      const res = await fetch("{% url 'dashboard_data' %}");
+      if (!res.ok || res.redirected) { location.reload(); return; }
+      const data = await res.json();
+      lastData = data;
+      canBL = data.can_blacklist;
+      offset = data.server_now - Date.now() / 1000;
+      renderAll(data);
+      lastUpdate = new Date().toLocaleTimeString();
+      setUpdated();
+    } catch (e) {
+      document.getElementById("updated").textContent = t("lost");
+    }
+  }
+
+  applyStatic();
+  refresh();
+  setInterval(refresh, 15000);
+  setInterval(tick, 1000);
+</script>
+{% endblock %}

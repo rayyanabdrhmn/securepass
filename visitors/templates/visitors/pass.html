@@ -1,0 +1,32 @@
+{% extends "visitors/base.html" %}
+{% block content %}
+<div class="card shadow-sm text-center">
+  <div class="card-body">
+    <h5 class="card-title">Visitor's Digital Pass</h5>
+    <img src="{% url 'pass_qr' vpass.token %}" alt="QR code" class="img-fluid my-3" style="max-width: 250px;">
+    <p class="mb-1"><strong>{{ vpass.visitor.name }}</strong></p>
+    <p class="mb-1">Plate: {{ vpass.visitor.vehicle_plate }}</p>
+    <p class="mb-3">Phone: {{ vpass.visitor.phone }}</p>
+    <p class="small text-muted">Pass ID: {{ vpass.token }}</p>
+
+    {% if log.status == "Pending" %}
+      <div class="alert alert-secondary">Show this QR code to the guard when you arrive.</div>
+    {% elif log.status == "Ongoing" %}
+      <div class="alert alert-success">
+        Entered at {{ log.entry_time|time:"H:i" }}. Please tap the button below when you leave.
+      </div>
+      <form method="post" action="{% url 'leave' vpass.token %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger w-100">I'm leaving</button>
+      </form>
+    {% else %}
+      <div class="alert alert-secondary">Visit completed. Thank you!</div>
+    {% endif %}
+
+    <p class="text-muted small mt-3">
+      Your time limit is {{ vpass.time_limit_minutes }} minutes, starting when the guard scans your pass.
+      Show this QR code to the guard at the gate. To extend your stay, notify the residence fellow.
+    </p>
+  </div>
+</div>
+{% endblock %}

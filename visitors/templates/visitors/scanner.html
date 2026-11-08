@@ -1,0 +1,64 @@
+{% extends "visitors/base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Scan Visitor Pass</h5>
+  <form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button class="btn btn-sm btn-outline-secondary">Logout</button>
+  </form>
+</div>
+
+<div id="reader" class="mb-3"></div>
+
+<div class="input-group mb-3">
+  <input type="text" id="manual" class="form-control" placeholder="Or paste Pass ID here">
+  <button class="btn btn-success" id="manualBtn">Submit</button>
+</div>
+
+<div id="result"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const csrf = "{{ csrf_token }}";
+  let busy = false;
+
+  function show(data) {
+    const box = document.getElementById("result");
+    box.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "alert " + (data.ok ? "alert-success" : "alert-danger");
+    const lines = [data.message, data.name, data.plate, data.phone];
+    lines.forEach((text, i) => {
+      if (!text) return;
+      const p = document.createElement("div");
+      if (i === 0) p.className = "fw-bold";
+      p.textContent = text;   // textContent keeps visitor input safe
+      card.appendChild(p);
+    });
+    box.appendChild(card);
+  }
+
+  async function sendToken(token) {
+    if (busy) return;
+    busy = true;
+    try {
+      const res = await fetch("{% url 'scan_api' %}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
+        body: JSON.stringify({token: token}),
+      });
+      show(await res.json());
+    } catch (e) {
+      show({ok: false, message: "Network error. Try again."});
+    }
+    setTimeout(() => { busy = false; }, 3000);  // avoid double-scans
+  }
+
+  document.getElementById("manualBtn").addEventListener("click", () => {
+    sendToken(document.getElementById("manual").value);
+  });
+
+  const scanner = new Html5QrcodeScanner("reader", {fps: 10, qrbox: 220}, false);
+  scanner.render((text) => sendToken(text), () => {});
+</script>
+{% endblock %}
