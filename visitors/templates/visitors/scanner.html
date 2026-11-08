@@ -21,12 +21,17 @@
 <script>
   const csrf = "{{ csrf_token }}";
   let busy = false;
+  let lastToken = "";
+  let lastTime = 0;
 
   function show(data) {
     const box = document.getElementById("result");
     box.innerHTML = "";
     const card = document.createElement("div");
-    card.className = "alert " + (data.ok ? "alert-success" : "alert-danger");
+    let style = "alert-success";
+    if (!data.ok) style = "alert-danger";
+    else if (data.action === "inside") style = "alert-info";
+    card.className = "alert " + style;
     const lines = [data.message, data.name, data.plate, data.phone];
     lines.forEach((text, i) => {
       if (!text) return;
@@ -35,11 +40,21 @@
       p.textContent = text;   // textContent keeps visitor input safe
       card.appendChild(p);
     });
+    const time = document.createElement("div");
+    time.className = "small text-muted mt-1";
+    time.textContent = "Scanned at " + new Date().toLocaleTimeString();
+    card.appendChild(time);
     box.appendChild(card);
   }
 
-  async function sendToken(token) {
-    if (busy) return;
+  async function sendToken(token, fromButton) {
+    token = (token || "").trim();
+    if (!token || busy) return;
+    const now = Date.now();
+    // The camera reads the same QR many times a second, so ignore repeats for 15 seconds
+    if (!fromButton && token === lastToken && now - lastTime < 15000) return;
+    lastToken = token;
+    lastTime = now;
     busy = true;
     try {
       const res = await fetch("{% url 'scan_api' %}", {
@@ -51,14 +66,14 @@
     } catch (e) {
       show({ok: false, message: "Network error. Try again."});
     }
-    setTimeout(() => { busy = false; }, 3000);  // avoid double-scans
+    busy = false;
   }
 
   document.getElementById("manualBtn").addEventListener("click", () => {
-    sendToken(document.getElementById("manual").value);
+    sendToken(document.getElementById("manual").value, true);
   });
 
   const scanner = new Html5QrcodeScanner("reader", {fps: 10, qrbox: 220}, false);
-  scanner.render((text) => sendToken(text), () => {});
+  scanner.render((text) => sendToken(text, false), () => {});
 </script>
 {% endblock %}

@@ -90,9 +90,8 @@ def scan_api(request):
         "phone": visitor.phone,
     }
     log = Logbook.objects.filter(visitor_pass=vpass).first()
-    now = timezone.now()
 
-    # 3. Decide what the scan means, based on the current status
+    # 3. New pass: check the blacklist, then record entry
     if log.status == "Pending":
         blacklisted = Blacklist.objects.filter(
             Q(vehicle_plate__iexact=visitor.vehicle_plate) | Q(ic_number=visitor.ic_number)
@@ -101,7 +100,7 @@ def scan_api(request):
             return JsonResponse(
                 {"ok": False, "message": "BLACKLISTED - DENY ENTRY", **info}
             )
-        log.entry_time = now
+        log.entry_time = timezone.now()
         log.status = "Ongoing"
         log.save()
         return JsonResponse(
@@ -109,18 +108,23 @@ def scan_api(request):
              "message": f"ENTRY recorded. Time limit: {vpass.time_limit_minutes} min.", **info}
         )
 
+    # 4. Already inside: show info only, never record an exit from a scan
     if log.status == "Ongoing":
-        log.exit_time = now
-        log.status = "Completed"
-        log.exit_method = "guard"
-        log.save()
-        minutes = int((now - log.entry_time).total_seconds() // 60)
+        entered = timezone.localtime(log.entry_time).strftime("%H:%M")
+        left = vpass.time_limit_minutes - log.elapsed_minutes()
+        if left >= 0:
+            status_text = f"{left} min left"
+        else:
+            status_text = f"over the limit by {-left} min"
         return JsonResponse(
-            {"ok": True, "action": "exit",
-             "message": f"EXIT recorded. Stayed {minutes} min.", **info}
+            {"ok": True, "action": "inside",
+             "message": f"ALREADY INSIDE since {entered} ({status_text}).", **info}
         )
 
-    return JsonResponse({"ok": False, "message": "Pass already used.", **info})
+    # 5. Visit finished: the pass can't be reused
+    return JsonResponse(
+        {"ok": False, "message": "PASS ALREADY USED. The visitor must register again.", **info}
+    )
 
 def _tel(phone):
     """Turn 012-345 6789 into +60123456789 so the phone can dial it."""
