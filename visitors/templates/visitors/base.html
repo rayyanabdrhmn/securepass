@@ -19,6 +19,9 @@
         <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-success">Dashboard</a>
       </div>
     {% endif %}
+    {% for message in messages %}
+      <div class="alert alert-info">{{ message }}</div>
+    {% endfor %}
     {% block content %}{% endblock %}
   </div>
 </body>

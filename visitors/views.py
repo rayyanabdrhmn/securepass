@@ -2,6 +2,7 @@ import io
 import json
 import uuid
 from datetime import timedelta
+from django.contrib import messages
 
 import qrcode
 from django.contrib.auth.decorators import login_required
@@ -15,7 +16,21 @@ from .forms import VisitorForm
 from .models import Blacklist, Logbook, Notification, Visitor, VisitorPass
 
 
+def _active_passes():
+    """Passes still in use: inside now, or registered in the last 12 hours but not scanned yet."""
+    recent = timezone.now() - timedelta(hours=12)
+    return VisitorPass.objects.filter(
+        Q(logbook__status="Ongoing") | Q(logbook__status="Pending", issued_at__gte=recent)
+    )
+
+
 def register(request):
+    # Layer A: does this phone already have an active pass? (remembered in the browser session)
+    active_pass = None
+    saved = request.session.get("active_pass")
+    if saved:
+        active_pass = _active_passes().filter(token=saved).first()
+
     if request.method == "POST":
         form = VisitorForm(request.POST)
         if form.is_valid():
@@ -29,14 +44,26 @@ def register(request):
             if is_blacklisted:
                 return render(request, "visitors/blacklisted.html")
 
+            # Layer B: same plate and IC already has an active visit, so give back that pass
+            existing = (
+                _active_passes()
+                .filter(visitor__vehicle_plate__iexact=plate, visitor__ic_number=ic)
+                .order_by("-issued_at")
+                .first()
+            )
+            if existing:
+                request.session["active_pass"] = str(existing.token)
+                messages.info(request, "You already have an active visit, so here is your existing pass.")
+                return redirect("visitor_pass", token=existing.token)
+
             visitor = form.save()
             vpass = VisitorPass.objects.create(visitor=visitor)
             Logbook.objects.create(visitor_pass=vpass)  # status starts as Pending
+            request.session["active_pass"] = str(vpass.token)
             return redirect("visitor_pass", token=vpass.token)
     else:
         form = VisitorForm()
-    return render(request, "visitors/register.html", {"form": form})
-
+    return render(request, "visitors/register.html", {"form": form, "active_pass": active_pass})
 
 def visitor_pass(request, token):
     vpass = get_object_or_404(VisitorPass, token=token)
