@@ -111,7 +111,12 @@ def scan_api(request):
         return JsonResponse({"ok": False, "code": "not_found"}, status=404)
 
     visitor = vpass.visitor
-    info = {"name": visitor.name, "plate": visitor.vehicle_plate, "phone": visitor.phone}
+    info = {
+        "name": visitor.name,
+        "plate": visitor.vehicle_plate,
+        "phone": visitor.phone,
+        "ic_last4": visitor.ic_number[-4:],
+    }
     log = Logbook.objects.filter(visitor_pass=vpass).first()
 
     # 3. New pass: check the blacklist, then record entry

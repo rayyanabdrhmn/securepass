@@ -41,7 +41,9 @@
       entry: "ENTRY RECORDED. Time limit: {limit} min.",
       insideLeft: "ALREADY INSIDE since {entered} ({left} min left).",
       insideOver: "ALREADY INSIDE since {entered} (over the limit by {over} min).",
-      used: "PASS ALREADY USED. The visitor must register again."
+      used: "PASS ALREADY USED. The visitor must register again.",
+      ic: "MyKad",
+      checkHint: "Check that the car plate and MyKad match before letting them in."
     },
     ms: {
       title: "Imbas Pas Pelawat", logout: "Log Keluar",
@@ -56,7 +58,9 @@
       entry: "MASUK DIREKOD. Had masa: {limit} minit.",
       insideLeft: "SUDAH DI DALAM sejak {entered} (baki {left} minit).",
       insideOver: "SUDAH DI DALAM sejak {entered} (melebihi had {over} minit).",
-      used: "PAS SUDAH DIGUNAKAN. Pelawat perlu mendaftar semula."
+      used: "PAS SUDAH DIGUNAKAN. Pelawat perlu mendaftar semula.",
+      ic: "MyKad",
+      checkHint: "Pastikan nombor plat kereta dan MyKad sepadan sebelum membenarkan masuk."
     }
   };
 
@@ -98,12 +102,18 @@
     title.textContent = messageFor(d);
     card.appendChild(title);
 
-    [["name", d.name], ["plate", d.plate], ["phone", d.phone]].forEach(([key, value]) => {
+  [["name", d.name], ["plate", d.plate], ["ic", d.ic_last4 ? "****-**-" + d.ic_last4 : ""], ["phone", d.phone]].forEach(([key, value]) => {
       if (!value) return;
       const line = document.createElement("div");
       line.textContent = t(key) + ": " + value;   // textContent keeps visitor input safe
       card.appendChild(line);
     });
+    if (d.code === "entry") {
+      const hint = document.createElement("div");
+      hint.className = "fw-bold mt-2";
+      hint.textContent = t("checkHint");
+      card.appendChild(hint);
+    }
 
     const time = document.createElement("div");
     time.className = "small text-muted mt-1";
