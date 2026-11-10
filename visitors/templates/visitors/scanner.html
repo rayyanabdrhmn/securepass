@@ -1,18 +1,23 @@
 {% extends "visitors/base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 class="mb-0">Scan Visitor Pass</h5>
-  <form method="post" action="{% url 'logout' %}">
-    {% csrf_token %}
-    <button class="btn btn-sm btn-outline-secondary">Logout</button>
-  </form>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h5 class="mb-0" data-i18n="title"></h5>
+  <div class="d-flex gap-2">
+    <button id="langBtn" class="btn btn-sm btn-outline-primary"></button>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-outline-secondary" data-i18n="logout"></button>
+    </form>
+  </div>
 </div>
 
+<button id="camBtn" class="btn btn-success w-100 mb-2"></button>
+<div id="camMsg" class="text-danger small mb-2"></div>
 <div id="reader" class="mb-3"></div>
 
 <div class="input-group mb-3">
-  <input type="text" id="manual" class="form-control" placeholder="Or paste Pass ID here">
-  <button class="btn btn-success" id="manualBtn">Submit</button>
+  <input type="text" id="manual" class="form-control" autocomplete="off">
+  <button class="btn btn-outline-success" id="manualBtn" data-i18n="submit"></button>
 </div>
 
 <div id="result"></div>
@@ -20,32 +25,97 @@
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
   const csrf = "{{ csrf_token }}";
-  let busy = false;
-  let lastToken = "";
-  let lastTime = 0;
 
-  function show(data) {
+  // ---------- Translations (edit any wording here) ----------
+  const I18N = {
+    en: {
+      title: "Scan Visitor Pass", logout: "Logout",
+      start: "Start camera", stop: "Stop camera",
+      manualPh: "Or type / paste Pass ID", submit: "Submit",
+      camError: "The camera could not start. Allow camera access, or use the Pass ID box.",
+      scannedAt: "Scanned at", name: "Name", plate: "Plate", phone: "Phone",
+      network: "Network error. Try again.",
+      invalid: "Invalid QR code.",
+      not_found: "Pass not found.",
+      blacklisted: "BLACKLISTED - DENY ENTRY",
+      entry: "ENTRY RECORDED. Time limit: {limit} min.",
+      insideLeft: "ALREADY INSIDE since {entered} ({left} min left).",
+      insideOver: "ALREADY INSIDE since {entered} (over the limit by {over} min).",
+      used: "PASS ALREADY USED. The visitor must register again."
+    },
+    ms: {
+      title: "Imbas Pas Pelawat", logout: "Log Keluar",
+      start: "Mula kamera", stop: "Henti kamera",
+      manualPh: "Atau taip / tampal ID Pas", submit: "Hantar",
+      camError: "Kamera tidak dapat dimulakan. Benarkan akses kamera, atau gunakan kotak ID Pas.",
+      scannedAt: "Diimbas pada", name: "Nama", plate: "No. plat", phone: "No. telefon",
+      network: "Ralat rangkaian. Cuba lagi.",
+      invalid: "Kod QR tidak sah.",
+      not_found: "Pas tidak dijumpai.",
+      blacklisted: "SENARAI HITAM - JANGAN BENARKAN MASUK",
+      entry: "MASUK DIREKOD. Had masa: {limit} minit.",
+      insideLeft: "SUDAH DI DALAM sejak {entered} (baki {left} minit).",
+      insideOver: "SUDAH DI DALAM sejak {entered} (melebihi had {over} minit).",
+      used: "PAS SUDAH DIGUNAKAN. Pelawat perlu mendaftar semula."
+    }
+  };
+
+  let lang = "en";
+  try { lang = localStorage.getItem("lang") || "en"; } catch (e) {}
+  if (!I18N[lang]) lang = "en";
+
+  function t(key, vars) {
+    let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    if (vars) Object.keys(vars).forEach(k => { s = s.split("{" + k + "}").join(vars[k]); });
+    return s;
+  }
+
+  // ---------- Showing a result ----------
+  let lastResult = null;
+  let lastScanTime = "";
+
+  function messageFor(d) {
+    if (d.code === "entry") return t("entry", {limit: d.limit});
+    if (d.code === "inside") {
+      return d.left >= 0
+        ? t("insideLeft", {entered: d.entered, left: d.left})
+        : t("insideOver", {entered: d.entered, over: -d.left});
+    }
+    if (I18N.en[d.code]) return t(d.code);
+    return d.message || t("network");
+  }
+
+  function show(d) {
     const box = document.getElementById("result");
-    box.innerHTML = "";
+    box.replaceChildren();
     const card = document.createElement("div");
-    let style = "alert-success";
-    if (!data.ok) style = "alert-danger";
-    else if (data.action === "inside") style = "alert-info";
+    let style = d.ok ? "alert-success" : "alert-danger";
+    if (d.code === "inside") style = d.left >= 0 ? "alert-info" : "alert-warning";
     card.className = "alert " + style;
-    const lines = [data.message, data.name, data.plate, data.phone];
-    lines.forEach((text, i) => {
-      if (!text) return;
-      const p = document.createElement("div");
-      if (i === 0) p.className = "fw-bold";
-      p.textContent = text;   // textContent keeps visitor input safe
-      card.appendChild(p);
+
+    const title = document.createElement("div");
+    title.className = "fw-bold";
+    title.textContent = messageFor(d);
+    card.appendChild(title);
+
+    [["name", d.name], ["plate", d.plate], ["phone", d.phone]].forEach(([key, value]) => {
+      if (!value) return;
+      const line = document.createElement("div");
+      line.textContent = t(key) + ": " + value;   // textContent keeps visitor input safe
+      card.appendChild(line);
     });
+
     const time = document.createElement("div");
     time.className = "small text-muted mt-1";
-    time.textContent = "Scanned at " + new Date().toLocaleTimeString();
+    time.textContent = t("scannedAt") + " " + lastScanTime;
     card.appendChild(time);
     box.appendChild(card);
   }
+
+  // ---------- Sending a scan to the server ----------
+  let busy = false;
+  let lastToken = "";
+  let lastTime = 0;
 
   async function sendToken(token, fromButton) {
     token = (token || "").trim();
@@ -56,24 +126,81 @@
     lastToken = token;
     lastTime = now;
     busy = true;
+    lastScanTime = new Date().toLocaleTimeString();
     try {
       const res = await fetch("{% url 'scan_api' %}", {
         method: "POST",
         headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
         body: JSON.stringify({token: token}),
       });
-      show(await res.json());
+      if (res.redirected) { location.reload(); return; }   // logged out, go to login
+      lastResult = await res.json();
     } catch (e) {
-      show({ok: false, message: "Network error. Try again."});
+      lastResult = {ok: false, code: "network"};
     }
     busy = false;
+    show(lastResult);
   }
 
   document.getElementById("manualBtn").addEventListener("click", () => {
     sendToken(document.getElementById("manual").value, true);
   });
+  document.getElementById("manual").addEventListener("keydown", e => {
+    if (e.key === "Enter") sendToken(e.target.value, true);
+  });
 
-  const scanner = new Html5QrcodeScanner("reader", {fps: 10, qrbox: 220}, false);
-  scanner.render((text) => sendToken(text, false), () => {});
+  // ---------- Camera ----------
+  const qr = new Html5Qrcode("reader");
+  let camOn = false;
+  let camFailed = false;
+
+  function setCamButton() {
+    const b = document.getElementById("camBtn");
+    b.textContent = camOn ? t("stop") : t("start");
+    b.className = "btn w-100 mb-2 " + (camOn ? "btn-outline-danger" : "btn-success");
+    document.getElementById("camMsg").textContent = camFailed ? t("camError") : "";
+  }
+
+  document.getElementById("camBtn").addEventListener("click", async () => {
+    const b = document.getElementById("camBtn");
+    b.disabled = true;
+    try {
+      if (camOn) {
+        await qr.stop();
+        camOn = false;
+      } else {
+        await qr.start(
+          {facingMode: "environment"},          // back camera on phones
+          {fps: 10, qrbox: 220},
+          text => sendToken(text, false),
+          () => {}
+        );
+        camOn = true;
+        camFailed = false;
+      }
+    } catch (e) {
+      camFailed = true;
+    }
+    b.disabled = false;
+    setCamButton();
+  });
+
+  // ---------- Language ----------
+  function applyLang() {
+    document.querySelectorAll("[data-i18n]").forEach(e => { e.textContent = t(e.dataset.i18n); });
+    document.getElementById("manual").placeholder = t("manualPh");
+    document.getElementById("langBtn").textContent = lang === "en" ? "Bahasa Melayu" : "English";
+    document.documentElement.lang = lang;
+    setCamButton();
+    if (lastResult) show(lastResult);
+  }
+
+  document.getElementById("langBtn").addEventListener("click", () => {
+    lang = lang === "en" ? "ms" : "en";
+    try { localStorage.setItem("lang", lang); } catch (e) {}
+    applyLang();
+  });
+
+  applyLang();
 </script>
 {% endblock %}

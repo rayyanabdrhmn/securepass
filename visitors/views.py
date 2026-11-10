@@ -103,19 +103,15 @@ def scan_api(request):
         data = json.loads(request.body)
         token = uuid.UUID(str(data.get("token", "")).strip())
     except (ValueError, json.JSONDecodeError):
-        return JsonResponse({"ok": False, "message": "Invalid QR code."}, status=400)
+        return JsonResponse({"ok": False, "code": "invalid"}, status=400)
 
     # 2. Find the pass
     vpass = VisitorPass.objects.filter(token=token).select_related("visitor").first()
     if vpass is None:
-        return JsonResponse({"ok": False, "message": "Pass not found."}, status=404)
+        return JsonResponse({"ok": False, "code": "not_found"}, status=404)
 
     visitor = vpass.visitor
-    info = {
-        "name": visitor.name,
-        "plate": visitor.vehicle_plate,
-        "phone": visitor.phone,
-    }
+    info = {"name": visitor.name, "plate": visitor.vehicle_plate, "phone": visitor.phone}
     log = Logbook.objects.filter(visitor_pass=vpass).first()
 
     # 3. New pass: check the blacklist, then record entry
@@ -124,34 +120,26 @@ def scan_api(request):
             Q(vehicle_plate__iexact=visitor.vehicle_plate) | Q(ic_number=visitor.ic_number)
         ).exists()
         if blacklisted:
-            return JsonResponse(
-                {"ok": False, "message": "BLACKLISTED - DENY ENTRY", **info}
-            )
+            return JsonResponse({"ok": False, "code": "blacklisted", **info})
         log.entry_time = timezone.now()
         log.status = "Ongoing"
         log.save()
         return JsonResponse(
-            {"ok": True, "action": "entry",
-             "message": f"ENTRY recorded. Time limit: {vpass.time_limit_minutes} min.", **info}
+            {"ok": True, "code": "entry", "limit": vpass.time_limit_minutes, **info}
         )
 
     # 4. Already inside: show info only, never record an exit from a scan
     if log.status == "Ongoing":
-        entered = timezone.localtime(log.entry_time).strftime("%H:%M")
-        left = vpass.time_limit_minutes - log.elapsed_minutes()
-        if left >= 0:
-            status_text = f"{left} min left"
-        else:
-            status_text = f"over the limit by {-left} min"
-        return JsonResponse(
-            {"ok": True, "action": "inside",
-             "message": f"ALREADY INSIDE since {entered} ({status_text}).", **info}
-        )
+        return JsonResponse({
+            "ok": True,
+            "code": "inside",
+            "entered": timezone.localtime(log.entry_time).strftime("%H:%M"),
+            "left": vpass.time_limit_minutes - log.elapsed_minutes(),
+            **info,
+        })
 
     # 5. Visit finished: the pass can't be reused
-    return JsonResponse(
-        {"ok": False, "message": "PASS ALREADY USED. The visitor must register again.", **info}
-    )
+    return JsonResponse({"ok": False, "code": "used", **info})
 
 def _tel(phone):
     """Turn 012-345 6789 into +60123456789 so the phone can dial it."""
