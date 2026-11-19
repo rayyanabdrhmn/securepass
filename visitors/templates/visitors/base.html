@@ -19,7 +19,10 @@
       padding-bottom: 1rem; margin-bottom: 1.5rem;
       border-bottom: 1px solid var(--bs-border-color);
     }
-    .brand { display: flex; align-items: center; gap: .625rem; min-width: 0; }
+    .brand { display: flex; align-items: center; gap: .625rem; min-width: 0; text-decoration: none; padding: .25rem .5rem; margin: -.25rem -.5rem; border-radius: .5rem; transition: background-color .15s ease; }
+    .brand:hover, .brand:active, .brand:focus-visible { background-color: var(--bs-success-bg-subtle); }
+    .brand:focus-visible { outline: 2px solid var(--bs-success); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .brand { transition: none; } }
     .brand img { display: block; width: 34px; height: 35px; flex-shrink: 0; }
     .brand-name {
       margin: 0; font-size: 1.25rem; font-weight: 600; line-height: 1.2;
@@ -39,10 +42,10 @@
 <body class="bg-light">
   <div class="container py-4 {% block pagewidth %}page-narrow{% endblock %}">
     <header class="site-header">
-      <div class="brand">
+      <a class="brand" href="{% url 'register' %}">
         <img src="{% static 'visitors/img/securepass-logo.png' %}" alt="" width="34" height="35">
         <h1 class="brand-name">UNITEN SecurePass</h1>
-      </div>
+      </a>
       {% if user.is_authenticated %}
         {% with page=request.resolver_match.url_name %}
         <nav class="staff-nav" aria-label="Staff">
