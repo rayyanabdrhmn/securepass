@@ -29,7 +29,8 @@ class VisitorForm(forms.ModelForm):
         # Hints for phone keyboards (number pad for IC and phone, capitals for plate)
         hints = {
             "name": {"placeholder": "Full name as on MyKad", "autocomplete": "name"},
-            "vehicle_plate": {"placeholder": "e.g. WXY 1234", "autocapitalize": "characters"},
+            "vehicle_plate": {"placeholder": "e.g. WXY 1234", "autocapitalize": "characters",
+                              "autocorrect": "off", "spellcheck": "false"},
             "phone": {"placeholder": "e.g. 012-345 6789", "inputmode": "tel", "autocomplete": "tel"},
             "ic_number": {"placeholder": "12 digits, dashes optional", "inputmode": "numeric"},
         }

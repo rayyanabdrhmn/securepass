@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 staticfiles/
 CLAUDE.md
+PRODUCT.md
+DESIGN.md
+.impeccable/
+.claude/
