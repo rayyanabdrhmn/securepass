@@ -9,18 +9,50 @@
   <style>
     .page-narrow { max-width: 480px; }
     .page-wide { max-width: 960px; }
+
+    ::selection { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+
+    /* Header: logo + name on the left, staff links on the right, one hairline rule below */
+    .site-header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: .75rem 1rem;
+      padding-bottom: 1rem; margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--bs-border-color);
+    }
+    .brand { display: flex; align-items: center; gap: .625rem; min-width: 0; }
+    .brand img { display: block; width: 34px; height: 35px; flex-shrink: 0; }
+    .brand-name {
+      margin: 0; font-size: 1.25rem; font-weight: 600; line-height: 1.2;
+      letter-spacing: -.01em; color: var(--bs-success);
+    }
+    .staff-nav { display: flex; gap: .375rem; }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body class="bg-light">
   <div class="container py-4 {% block pagewidth %}page-narrow{% endblock %}">
-    <h3 class="text-center text-success mb-3">UNITEN SecurePass</h3>
-    {% if user.is_authenticated %}
-      <div class="text-center mb-3">
-        <a href="{% url 'scanner' %}" class="btn btn-sm btn-outline-success">Scanner</a>
-        <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-success">Dashboard</a>
+    <header class="site-header">
+      <div class="brand">
+        <img src="{% static 'visitors/img/securepass-logo.png' %}" alt="" width="34" height="35">
+        <h1 class="brand-name">UNITEN SecurePass</h1>
       </div>
-    {% endif %}
+      {% if user.is_authenticated %}
+        {% with page=request.resolver_match.url_name %}
+        <nav class="staff-nav" aria-label="Staff">
+          {% if page == "scanner" %}
+            <a href="{% url 'scanner' %}" class="btn btn-sm btn-success" aria-current="page">Scanner</a>
+          {% else %}
+            <a href="{% url 'scanner' %}" class="btn btn-sm btn-outline-success">Scanner</a>
+          {% endif %}
+          {% if page == "dashboard" %}
+            <a href="{% url 'dashboard' %}" class="btn btn-sm btn-success" aria-current="page">Dashboard</a>
+          {% else %}
+            <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-success">Dashboard</a>
+          {% endif %}
+        </nav>
+        {% endwith %}
+      {% endif %}
+    </header>
     {% for message in messages %}
       <div class="alert alert-info">{{ message }}</div>
     {% endfor %}
