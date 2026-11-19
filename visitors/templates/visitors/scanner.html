@@ -1,7 +1,32 @@
 {% extends "visitors/base.html" %}
+{% block head %}
+<style>
+  /* Camera area: no empty gaps before the camera starts or when there is no error */
+  #camMsg:empty { margin: 0 !important; }
+  #reader { border-radius: var(--bs-border-radius); overflow: hidden; }
+  #reader:empty { margin: 0 !important; }
+
+  /* Pass ID box: 44px, same as the visitor-card fields */
+  .scan-manual { margin-top: .75rem; }
+  .scan-manual .form-control,
+  .scan-manual .btn { min-height: 2.75rem; }
+  .scan-manual .btn { font-weight: 600; padding-left: 1rem; padding-right: 1rem; }
+
+  /* Scan result: read at a glance, in sunlight, at arm's length */
+  .scan-result { padding: 1.125rem 1.25rem; font-size: 1.125rem; line-height: 1.4; }
+  .scan-verdict { font-size: 1.375rem; line-height: 1.25; margin-bottom: .625rem; overflow-wrap: anywhere; }
+  .scan-fact { overflow-wrap: anywhere; }
+  .scan-fact-plate { font-weight: 600; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  .scan-hint {
+    margin-top: .75rem !important; padding-top: .625rem;
+    border-top: 1px solid var(--bs-alert-border-color);
+  }
+  .scan-time { margin-top: .5rem !important; color: var(--bs-alert-color); opacity: .8; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-  <h5 class="mb-0" data-i18n="title"></h5>
+  <h2 class="h5 mb-0" data-i18n="title"></h2>
   <div class="d-flex gap-2">
     <button id="langBtn" class="btn btn-sm btn-outline-primary"></button>
     <form method="post" action="{% url 'logout' %}">
@@ -11,16 +36,16 @@
   </div>
 </div>
 
-<button id="camBtn" class="btn btn-success w-100 mb-2"></button>
-<div id="camMsg" class="text-danger small mb-2"></div>
+<button id="camBtn" class="btn btn-success w-100 mb-2 visitor-action"></button>
+<div id="camMsg" class="text-danger small mb-2" aria-live="polite"></div>
 <div id="reader" class="mb-3"></div>
 
-<div class="input-group mb-3">
+<div class="input-group mb-3 scan-manual">
   <input type="text" id="manual" class="form-control" autocomplete="off">
   <button class="btn btn-outline-success" id="manualBtn" data-i18n="submit"></button>
 </div>
 
-<div id="result"></div>
+<div id="result" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
@@ -95,28 +120,29 @@
     const card = document.createElement("div");
     let style = d.ok ? "alert-success" : "alert-danger";
     if (d.code === "inside") style = d.left >= 0 ? "alert-info" : "alert-warning";
-    card.className = "alert " + style;
+    card.className = "alert scan-result " + style;
 
     const title = document.createElement("div");
-    title.className = "fw-bold";
+    title.className = "fw-bold scan-verdict";
     title.textContent = messageFor(d);
     card.appendChild(title);
 
   [["name", d.name], ["plate", d.plate], ["ic", d.ic_last4 ? "****-**-" + d.ic_last4 : ""], ["phone", d.phone]].forEach(([key, value]) => {
       if (!value) return;
       const line = document.createElement("div");
+      line.className = "scan-fact scan-fact-" + key;
       line.textContent = t(key) + ": " + value;   // textContent keeps visitor input safe
       card.appendChild(line);
     });
     if (d.code === "entry") {
       const hint = document.createElement("div");
-      hint.className = "fw-bold mt-2";
+      hint.className = "fw-bold mt-2 scan-hint";
       hint.textContent = t("checkHint");
       card.appendChild(hint);
     }
 
     const time = document.createElement("div");
-    time.className = "small text-muted mt-1";
+    time.className = "small mt-1 scan-time";
     time.textContent = t("scannedAt") + " " + lastScanTime;
     card.appendChild(time);
     box.appendChild(card);
@@ -167,7 +193,7 @@
   function setCamButton() {
     const b = document.getElementById("camBtn");
     b.textContent = camOn ? t("stop") : t("start");
-    b.className = "btn w-100 mb-2 " + (camOn ? "btn-outline-danger" : "btn-success");
+    b.className = "btn w-100 mb-2 visitor-action " + (camOn ? "btn-outline-danger" : "btn-success");
     document.getElementById("camMsg").textContent = camFailed ? t("camError") : "";
   }
 
@@ -199,6 +225,7 @@
   function applyLang() {
     document.querySelectorAll("[data-i18n]").forEach(e => { e.textContent = t(e.dataset.i18n); });
     document.getElementById("manual").placeholder = t("manualPh");
+    document.getElementById("manual").setAttribute("aria-label", t("manualPh"));   // name for screen readers, follows the language
     document.getElementById("langBtn").textContent = lang === "en" ? "Bahasa Melayu" : "English";
     document.documentElement.lang = lang;
     setCamButton();
