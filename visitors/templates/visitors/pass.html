@@ -1,13 +1,36 @@
 {% extends "visitors/base.html" %}
+{% block head %}
+<style>
+  /* QR: large, square, crisp edges so the guard's camera reads it quickly */
+  .pass-qr {
+    display: block; width: 100%; max-width: 280px; height: auto; aspect-ratio: 1;
+    margin: 1rem auto .75rem; image-rendering: pixelated;
+  }
+  .pass-name { font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin-bottom: .75rem; overflow-wrap: anywhere; }
+
+  /* Plate and phone as ruled ledger lines: label left, value right */
+  .pass-facts { margin: 0 0 .75rem; text-align: left; border-bottom: 1px solid var(--bs-border-color); }
+  .pass-facts > div {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+    padding: .5rem 0; border-top: 1px solid var(--bs-border-color);
+  }
+  .pass-facts dt { font-weight: 400; color: var(--bs-secondary-color); }
+  .pass-facts dd { margin: 0; font-weight: 600; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  .pass-id { overflow-wrap: anywhere; margin-bottom: 1.25rem; }
+  .pass-note { margin: 1.25rem 0 0; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="card shadow-sm text-center">
+<div class="card shadow-sm visitor-card text-center">
   <div class="card-body">
-    <h5 class="card-title">Visitor's Digital Pass</h5>
-    <img src="{% url 'pass_qr' vpass.token %}" alt="QR code" class="img-fluid my-3" style="max-width: 250px;">
-    <p class="mb-1"><strong>{{ vpass.visitor.name }}</strong></p>
-    <p class="mb-1">Plate: {{ vpass.visitor.vehicle_plate }}</p>
-    <p class="mb-3">Phone: {{ vpass.visitor.phone }}</p>
-    <p class="small text-muted">Pass ID: {{ vpass.token }}</p>
+    <h2 class="visitor-card-title">Visitor's Digital Pass</h2>
+    <img src="{% url 'pass_qr' vpass.token %}" alt="QR code" class="pass-qr" width="280" height="280">
+    <p class="pass-name">{{ vpass.visitor.name }}</p>
+    <dl class="pass-facts">
+      <div><dt>Plate:</dt><dd>{{ vpass.visitor.vehicle_plate }}</dd></div>
+      <div><dt>Phone:</dt><dd>{{ vpass.visitor.phone }}</dd></div>
+    </dl>
+    <p class="small text-muted pass-id">Pass ID: {{ vpass.token }}</p>
 
     {% if log.status == "Pending" %}
       <div class="alert alert-secondary">Show this QR code to the guard when you arrive.</div>
@@ -17,13 +40,13 @@
       </div>
       <form method="post" action="{% url 'leave' vpass.token %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger w-100">I'm leaving</button>
+        <button type="submit" class="btn btn-danger w-100 visitor-action">I'm leaving</button>
       </form>
     {% else %}
       <div class="alert alert-secondary">Visit completed. Thank you!</div>
     {% endif %}
 
-    <p class="text-muted small mt-3">
+    <p class="text-muted small pass-note">
       Your time limit is {{ vpass.time_limit_minutes }} minutes, starting when the guard scans your pass.
       Show this QR code to the guard at the gate. To extend your stay, notify the residence fellow.
     </p>

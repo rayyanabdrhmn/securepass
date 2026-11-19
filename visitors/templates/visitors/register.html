@@ -10,16 +10,12 @@
     box-shadow: 0 0 0 .25rem rgba(var(--bs-danger-rgb), .25);
   }
 
-  /* Register card: calm hairline border, roomier padding, sturdy touch-sized fields */
-  .register-card { border-color: var(--bs-border-color); }
-  .register-card .card-body { padding: 1.5rem 1.25rem; }
-  @media (min-width: 400px) { .register-card .card-body { padding: 1.75rem 1.5rem; } }
-  .register-title { font-size: 1.375rem; font-weight: 600; letter-spacing: -.01em; margin-bottom: .375rem; }
+  /* Register form: sturdy touch-sized fields (card styles are shared, in base.html) */
   .register-card .form-label { font-weight: 500; margin-bottom: .375rem; }
   .register-card .form-control,
   .register-card .form-select { min-height: 2.75rem; padding-top: .5rem; padding-bottom: .5rem; }
   .register-card .mb-3 { margin-bottom: 1.125rem !important; }
-  .register-submit { min-height: 3rem; font-weight: 600; margin-top: .5rem; }
+  .register-submit { margin-top: .5rem; }
 </style>
 {% endblock %}
 {% block content %}
@@ -30,9 +26,9 @@
   </div>
 {% endif %}
 
-<div class="card shadow-sm register-card">
+<div class="card shadow-sm visitor-card register-card">
   <div class="card-body">
-    <h2 class="register-title">Visitor Registration</h2>
+    <h2 class="visitor-card-title">Visitor Registration</h2>
     {% if form.errors %}
       <div class="alert alert-danger py-2 mt-3" role="alert">
         Please fix the {{ form.errors|length }} highlighted field{{ form.errors|length|pluralize }} below.
@@ -54,7 +50,7 @@
           {% endif %}
         </div>
       {% endfor %}
-      <button type="submit" class="btn btn-success w-100 register-submit">Register</button>
+      <button type="submit" class="btn btn-success w-100 visitor-action register-submit">Register</button>
     </form>
   </div>
 </div>
