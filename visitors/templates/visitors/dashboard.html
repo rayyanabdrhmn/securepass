@@ -1,8 +1,60 @@
 {% extends "visitors/base.html" %}
 {% block pagewidth %}page-wide{% endblock %}
+{% block head %}
+<style>
+  /* Numbers that tick or get compared line up instead of jittering */
+  #updated, .visit-meta, .visit-badge, .dash-table td { font-variant-numeric: tabular-nums; }
+
+  /* Overstay alert: the loudest thing on the page */
+  .overstay-alert { border-color: var(--bs-danger); padding: .875rem 1rem; margin-bottom: .5rem; }
+  #alerts:not(:empty) { margin-bottom: 1rem; }
+  .overstay-alert > .fw-bold { flex: 1 1 18rem; overflow-wrap: anywhere; }
+
+  /* Tabs stay on one line; on a narrow phone they scroll sideways instead of wrapping */
+  .dash-tabs {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    border-bottom: 0; box-shadow: inset 0 -1px 0 var(--bs-border-color);
+  }
+  .dash-tabs::-webkit-scrollbar { display: none; }
+  .dash-tabs .nav-link { white-space: nowrap; margin-bottom: 0; }
+  .dash-tabs .nav-link.active { border-bottom-color: var(--bs-body-bg); }
+
+  /* Visit card: plate and name, then the countdown as the card's biggest signal */
+  .visit-title { overflow-wrap: anywhere; }
+  .visit-meta { margin-top: .125rem; }
+  .visit-badge { font-size: 1rem; padding: .375rem .625rem; margin-top: .5rem; }
+  .visit-card.border-danger { outline: 1px solid var(--bs-danger); outline-offset: -2px; }
+
+  /* Tables: a white bordered box that scrolls inside the column on a phone */
+  .tab-pane:has(> .dash-table), #visitors-list:has(> .dash-table) {
+    overflow-x: auto; background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius);
+  }
+  .dash-table { margin-bottom: 0; }
+  .dash-table th {
+    font-size: .875rem; font-weight: 600; color: var(--bs-secondary-color);
+    white-space: nowrap; padding-top: .5rem; padding-bottom: .5rem;
+  }
+  .dash-table th, .dash-table td { padding-left: .75rem; padding-right: .75rem; }
+  .dash-table td { white-space: nowrap; }
+  .dash-table td:first-child { white-space: normal; min-width: 9rem; font-weight: 500; }
+  #tab-blacklist .dash-table td:nth-child(3) { white-space: normal; min-width: 12rem; }
+  #search { min-height: 2.75rem; }
+
+  @media (max-width: 575.98px) {
+    .dash-tabs .nav-link { padding: .5rem .75rem; }
+    /* Thumb-sized buttons on a phone */
+    .visit-actions .btn, .overstay-alert .btn { min-height: 2.5rem; padding-left: .75rem; padding-right: .75rem; display: inline-flex; align-items: center; }
+    .visit-actions { margin-top: .25rem; }
+    /* Tighter cells so the next column peeks in and the table reads as scrollable */
+    .dash-table th, .dash-table td { padding-left: .5rem; padding-right: .5rem; }
+    .dash-table td:first-child { min-width: 7.5rem; }
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-  <h5 class="mb-0" data-i18n="title"></h5>
+  <h2 class="h5 mb-0" data-i18n="title"></h2>
   <div class="d-flex align-items-center gap-2">
     <span id="updated" class="small text-muted"></span>
     <button id="langBtn" class="btn btn-sm btn-outline-primary"></button>
@@ -15,7 +67,7 @@
 
 <div id="alerts"></div>
 
-<ul class="nav nav-tabs mb-3">
+<ul class="nav nav-tabs dash-tabs mb-3">
   <li class="nav-item">
     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-ongoing">
       <span data-i18n="ongoing"></span> <span id="count-ongoing" class="badge bg-success">0</span>
@@ -161,7 +213,7 @@
   }
 
   function makeTable(headers, rows) {
-    const table = el("table", "table table-sm table-striped bg-white align-middle");
+    const table = el("table", "table table-sm table-striped bg-white align-middle dash-table");
     const head = el("tr");
     headers.forEach(h => head.appendChild(el("th", "", h)));
     table.appendChild(el("thead")).appendChild(head);
@@ -193,7 +245,7 @@
     const box = document.getElementById("alerts");
     box.replaceChildren();
     alerts.forEach(a => {
-      const card = el("div", "alert alert-danger d-flex justify-content-between align-items-center flex-wrap gap-2");
+      const card = el("div", "alert alert-danger d-flex justify-content-between align-items-center flex-wrap gap-2 overstay-alert");
       card.appendChild(el("div", "fw-bold", t("alertMsg", {name: a.name, plate: a.plate, limit: a.limit})));
       const btns = el("div", "d-flex gap-1");
       btns.appendChild(callButton(a.name, a.phone, a.tel));
@@ -216,19 +268,19 @@
       return;
     }
     rows.forEach(r => {
-      const card = el("div", "card mb-2");
+      const card = el("div", "card mb-2 visit-card");
       const body = el("div", "card-body py-2");
       const top = el("div", "d-flex justify-content-between flex-wrap gap-2");
 
       const info = el("div");
-      info.appendChild(el("div", "fw-bold", r.plate + "  -  " + r.name));
-      const elapsedEl = el("div", "small text-muted");
+      info.appendChild(el("div", "fw-bold visit-title", r.plate + "  -  " + r.name));
+      const elapsedEl = el("div", "small text-muted visit-meta");
       info.appendChild(elapsedEl);
-      const badge = el("span", "badge");
+      const badge = el("span", "badge visit-badge");
       info.appendChild(badge);
       top.appendChild(info);
 
-      const actions = el("div", "d-flex gap-1 align-items-start");
+      const actions = el("div", "d-flex flex-wrap gap-1 align-items-start visit-actions");
       actions.appendChild(callButton(r.name, r.phone, r.tel));
       const ext = el("button", "btn btn-sm btn-outline-secondary", t("extend"));
       ext.addEventListener("click", () =>
@@ -334,8 +386,8 @@
   // ---------- Live timers (run every second in the browser) ----------
   function setState(tm, state) {
     const c = COLORS[state];
-    tm.card.className = "card mb-2 border-" + c;
-    tm.badge.className = "badge bg-" + c + (state === "warn" ? " text-dark" : "");
+    tm.card.className = "card mb-2 visit-card border-" + c;
+    tm.badge.className = "badge visit-badge bg-" + c + (state === "warn" ? " text-dark" : "");
     tm.fill.className = "progress-bar bg-" + c;
   }
 
